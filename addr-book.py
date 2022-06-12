@@ -1,7 +1,8 @@
 
-from audioop import add
 import csv
+from heapq import merge
 import os
+import re
 
 #
 # Определение глобальных переменных и констант
@@ -31,13 +32,37 @@ def load_addrbook(filename: str) -> list:
 # end load_addrbook
 
 # функция проверки и корректировки ФИО
-def check_fio(plst):
-    pass
+def check_fio(plist):
+    # склеиваем все части ФИО, вне зависимости заполнены они или нет
+    fio = plist[0] + ' ' + plist[1] + ' ' + plist[2]
+    # разбиваем ФИО на Ф. И. О., с помощью регулярных выражений
+    pattern = r'\w+'
+    fio = re.findall(pattern, fio)
+    # возвращаем корректный ФИО
+    for i in range(len(fio)):
+        plist[i] = fio[i]
+
 # end check_fio
 
 # функция проверки и исправления номера телефона
-def check_phone(plst):
-    pass
+def check_phone(plist):
+    
+    #получаем номер телефона
+    phone = plist[5]
+    # если номер телефона указан, обрабатываем его
+    if len(phone) > 0:
+        # убираем все лишние символы "(", ")","+7","8","-" 
+        pattern = r'^8 |^8|^\+[7] |^\+[7]|\(|\)|\-|\s'
+        phone = re.sub(pattern, '', phone)
+        # корректируем добавочный номер
+        phone = phone.replace('доб.', ' доб.')
+        phone = '+7(' + phone
+        phone = phone[0:6] + ')' + phone[6:]
+        phone = phone[0:10] + '-' + phone[10:]
+        phone = phone[0:13] + '-' + phone[13:]
+        # возвращаем обработанный номер телефона
+        plist[5] = phone
+
 # end check_phone
 
 
@@ -53,10 +78,55 @@ def normalize_addrbook(contacts_list: list):
 
 # end normalize_addrbook
 
+# функция поиска одинаковых сотрудников в справочнике
+def find_equal(lastname: str, firstname: str, clist: list) -> int:
+    
+    # поиск совпадений в списке
+    i = 0
+    for cl in clist:
+        if lastname.upper() == str(cl[0]).upper() and firstname.upper() == str(cl[1]).upper():
+            return i
+        i += 1
+    
+    # совпадения не найдены
+    return -1
+
+# end find_equal
+
+# функция объединения контактов
+def merge_contacts(contact1: list, contact2: list):
+    
+    # объединяем элементы контактов
+    for i in range(len(contact1)):
+        if len(contact1[i]) < len(contact2[i]):
+            contact1[i] = contact2[i]
+
+# end merge_contacts
+
 # функция объединения дублей записей адресной книги
 def dedup_addrbook(contacts_list: list):
-    pass
+    
+    i = 1
+    while i < len(contacts_list):
+        eq = find_equal(contacts_list[i][0], contacts_list[i][1], contacts_list[i+1:])
+        if eq >= 0:
+            eq = (eq + 1) + i
+            merge_contacts(contacts_list[i], contacts_list[eq])
+            del contacts_list[eq]
+        i += 1
+
 # end dedup_addrbook 
+
+# функция сохранения адресной книги
+def save_addrbook(filename: str, clist: list) -> int:
+
+    # сохраняем результаты в csv файл
+    with open(filename, "w", encoding='utf-8') as f:
+        datawriter = csv.writer(f, delimiter=',')
+        datawriter.writerows(clist)
+
+    return 0
+# end save_addrbook
 
 #
 # Главная функция программы
@@ -72,6 +142,9 @@ def main():
         normalize_addrbook(addrbook)
         # убираем дубли
         dedup_addrbook(addrbook)
+        # сохраняем результат
+        if save_addrbook(NEW_FILENAME, addrbook) < 0:
+            print('Ошибка во время сохранения резульатов в файл: ', NEW_FILENAME)
     else:
         # если загрузка не удалась завершаем программу
         print('Файл ', RAW_FILENAME, 'не найден!')
